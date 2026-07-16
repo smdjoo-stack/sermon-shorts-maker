@@ -1,0 +1,16 @@
+/node_modules
+/.next
+/.data
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
+.env
+/bin
+
+# Sample/reference media and rendered output stay local — sermon video is the
+# church's content, and reference screenshots are another app's UI.
+*.mp4
+*.m4a
+*.png
+!public/**/*.png
+!assets/**/*.png

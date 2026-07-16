@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0b0d12;
+  color: #eef1f6;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-line bg-panel2 px-4 py-3 text-white outline-none transition placeholder:text-muted/60 focus:border-accent;
+  }
+}
+
+/* thin scrollbars inside modals/lists */
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #2a3040;
+  border-radius: 8px;
+}
