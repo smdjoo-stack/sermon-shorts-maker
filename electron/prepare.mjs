@@ -15,12 +15,27 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const standalone = path.join(root, ".next", "standalone");
 const build = path.join(root, "build");
 
+// Runtime data that must never be copied into a build, no matter how it got
+// into the standalone tree.
+//
+// Next's file tracer resolves `path.join(process.cwd(), ".data")` in
+// lib/paths.ts and pulls the whole directory in — the user's cached sermon
+// videos. outputFileTracingExcludes cannot stop this for instrumentation.ts:
+// Next applies those excludes per *route*, and instrumentation isn't a route,
+// so it never goes through that code path (see collect-build-traces.js).
+// Filtering here is the reliable fix — this copy is ours.
+const NEVER_COPY = new Set([".data", "bin", "dist", "build"]);
+const isMedia = (name) => /\.(mp4|m4a|webm|mkv)$/i.test(name);
+
 // Hand-rolled recursive copy. fs.cpSync({recursive:true}) segfaults (0xC0000005)
 // on the standalone node_modules tree on Windows, so it can't be used here.
 // Symlinks are dereferenced: the packaged app must contain real files.
-function copyDir(from, to) {
+function copyDir(from, to, depth = 0) {
   fs.mkdirSync(to, { recursive: true });
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    // Only guard the tree root: a nested dir called "bin" may be a real dep.
+    if (depth === 0 && NEVER_COPY.has(entry.name)) continue;
+    if (isMedia(entry.name)) continue;
     const src = path.join(from, entry.name);
     const dst = path.join(to, entry.name);
     let type = entry;
@@ -31,7 +46,7 @@ function copyDir(from, to) {
         continue; // broken link — skip
       }
     }
-    if (type.isDirectory()) copyDir(src, dst);
+    if (type.isDirectory()) copyDir(src, dst, depth + 1);
     else if (type.isFile()) fs.copyFileSync(src, dst);
   }
 }

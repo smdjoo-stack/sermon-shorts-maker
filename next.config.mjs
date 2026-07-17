@@ -1,3 +1,19 @@
+// The file tracer reads `path.join(process.cwd(), ".data")` in lib/paths.ts and
+// helpfully copies that whole directory into the build — the user's cached
+// sermon videos and rendered output, 200MB+ of private content that would then
+// ship inside the installer. Same for bin/ (the downloaded yt-dlp) and previous
+// build artifacts. None of it belongs in a build: the packaged app creates
+// these fresh under userData.
+const EXCLUDE_FROM_BUILD = [
+  "./.data/**",
+  "./bin/**",
+  "./build/**",
+  "./dist/**",
+  "./electron/**",
+  "./*.mp4",
+  "./*.png",
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Emit .next/standalone: a self-contained server plus only the node_modules it
@@ -9,22 +25,12 @@ const nextConfig = {
   // Keep them external so Next doesn't try to bundle the .exe files.
   serverExternalPackages: ["ffmpeg-static", "yt-dlp-wrap"],
 
-  // The file tracer reads `path.join(process.cwd(), ".data")` in lib/paths.ts
-  // and helpfully copies that whole directory into the build — which is the
-  // user's cached sermon videos and rendered output (200MB+ of private
-  // content that would then ship inside the installer). Same for bin/ (the
-  // downloaded yt-dlp) and previous build artifacts. None of it belongs in a
-  // build: the packaged app creates these fresh under userData.
+  // Note this does NOT cover instrumentation.ts: Next applies these excludes
+  // per route, and instrumentation isn't a route, so its trace still drags
+  // .data in. No key works there — electron/prepare.mjs filters the copy
+  // instead, and its media guard is the backstop.
   outputFileTracingExcludes: {
-    "*": [
-      "./.data/**",
-      "./bin/**",
-      "./build/**",
-      "./dist/**",
-      "./electron/**",
-      "./*.mp4",
-      "./*.png",
-    ],
+    "*": EXCLUDE_FROM_BUILD,
   },
 
   // The tracer copies the next-server runtime for *pages* into standalone but

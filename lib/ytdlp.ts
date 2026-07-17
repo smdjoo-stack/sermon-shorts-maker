@@ -8,6 +8,7 @@ import { getYtDlp, FFMPEG } from "./binaries";
 // video+audio streams (system ffmpeg is not installed).
 const FFMPEG_DIR = path.dirname(FFMPEG);
 import { cachePath, tmpPath } from "./storage";
+import { markUsed } from "./cleanup";
 import {
   parseVttWords,
   wordsToCues,
@@ -90,7 +91,10 @@ export async function fetchCaptions(url: string, videoId: string): Promise<Cue[]
 // Download audio only (for the Gemini transcription fallback), cached.
 export async function fetchAudio(url: string, videoId: string): Promise<string> {
   const dest = cachePath(`${videoId}.m4a`);
-  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest;
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+    markUsed(dest); // keep the cleanup TTL measured from last use, not download
+    return dest;
+  }
   const yt = await getYtDlp();
   await yt.execPromise([
     url,
@@ -112,7 +116,10 @@ export async function fetchVideo(
   onProgress?: (p: number) => void,
 ): Promise<string> {
   const dest = cachePath(`${videoId}.mp4`);
-  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest;
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+    markUsed(dest);
+    return dest;
+  }
 
   const yt = await getYtDlp();
   await new Promise<void>((resolve, reject) => {
