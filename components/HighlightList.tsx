@@ -1,28 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  Highlight,
-  SubtitleOptions,
-  SubtitleSize,
-  SubtitlePosition,
-  VideoFit,
-} from "@/lib/types";
+import type { Highlight, SubtitleOptions, VideoFit } from "@/lib/types";
 import { mmss, durLabel, parseTime } from "@/lib/format";
 import { addCustomRange } from "@/lib/client";
-
-const SIZE_LABEL: Record<SubtitleSize, string> = {
-  small: "작게",
-  medium: "보통",
-  large: "크게",
-  xlarge: "아주 크게",
-};
-const POS_LABEL: Record<SubtitlePosition, string> = {
-  band: "하단 자막칸",
-  "video-under": "영상 바로 아래",
-  "video-bottom": "영상 안 하단",
-  "screen-bottom": "화면 맨 아래",
-};
+import { Chip, SubtitleControls } from "./StyleControls";
 
 export default function HighlightList({
   highlights,
@@ -189,53 +171,13 @@ export default function HighlightList({
         ))}
       </div>
 
-      {/* subtitle options */}
+      {/* default look for every clip — each one can be re-tuned afterwards on
+          the result screen, where you can actually see it */}
       <div className="mt-8 rounded-2xl border border-line bg-panel p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <span className="font-bold">자막 설정</span>
-          <label className="flex cursor-pointer items-center gap-2">
-            <span className="text-sm text-muted">자막 넣기</span>
-            <input
-              type="checkbox"
-              checked={subtitles.enabled}
-              onChange={(e) => setSubtitles({ ...subtitles, enabled: e.target.checked })}
-              className="h-5 w-5 accent-[var(--tw-accent,#f5c518)]"
-              style={{ accentColor: "#f5c518" }}
-            />
-          </label>
-        </div>
-        {subtitles.enabled && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="mb-2 text-sm text-muted">크기</div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {(Object.keys(SIZE_LABEL) as SubtitleSize[]).map((s) => (
-                  <Chip
-                    key={s}
-                    active={subtitles.size === s}
-                    onClick={() => setSubtitles({ ...subtitles, size: s })}
-                  >
-                    {SIZE_LABEL[s]}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-sm text-muted">위치</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(Object.keys(POS_LABEL) as SubtitlePosition[]).map((p) => (
-                  <Chip
-                    key={p}
-                    active={subtitles.position === p}
-                    onClick={() => setSubtitles({ ...subtitles, position: p })}
-                  >
-                    {POS_LABEL[p]}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <SubtitleControls value={subtitles} onChange={setSubtitles} />
+        <p className="mt-3 text-xs text-muted">
+          만든 뒤에도 영상별로 자막·제목을 다시 고칠 수 있어요.
+        </p>
       </div>
 
       {/* create bar */}
@@ -433,23 +375,3 @@ function NudgeBtns({ onDown, onUp }: { onDown: () => void; onUp: () => void }) {
   );
 }
 
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-lg border px-2 py-2 text-sm transition ${
-        active ? "border-accent bg-accent text-black font-bold" : "border-line bg-panel2 text-muted hover:border-accent/40"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

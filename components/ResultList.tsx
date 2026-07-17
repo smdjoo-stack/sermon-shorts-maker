@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { Cue, Highlight } from "@/lib/types";
+import type { Cue, Highlight, SubtitleOptions, TitleStyle } from "@/lib/types";
+import { DEFAULT_TITLE_STYLE } from "@/lib/types";
 import { mmss } from "@/lib/format";
+import { SubtitleControls, TitleControls } from "./StyleControls";
 
 export interface RenderedItem {
   highlight: Highlight;
@@ -16,11 +18,12 @@ export interface RenderedItem {
 
 export default function ResultList({
   items,
-  onEditSubtitles,
+  onRerender,
   onBack,
 }: {
   items: RenderedItem[];
-  onEditSubtitles: (highlightId: string, cues: Cue[]) => void;
+  // Anything the user changed here means re-rendering that one clip.
+  onRerender: (highlightId: string, patch: Partial<Highlight>) => void;
   onBack: () => void;
 }) {
   const [editing, setEditing] = useState<RenderedItem | null>(null);
@@ -55,7 +58,7 @@ export default function ResultList({
                     onClick={() => setEditing(it)}
                     className="flex-1 rounded-xl border border-line bg-panel2 py-2.5 text-sm font-bold hover:border-accent"
                   >
-                    ✎ 자막 수정
+                    ✎ 수정
                   </button>
                   <a
                     href={`${it.url}&download=1`}
@@ -86,11 +89,11 @@ export default function ResultList({
       </div>
 
       {editing && (
-        <SubtitleEditModal
+        <EditModal
           item={editing}
           onClose={() => setEditing(null)}
-          onSave={(cues) => {
-            onEditSubtitles(editing.highlight.id, cues);
+          onSave={(patch) => {
+            onRerender(editing.highlight.id, patch);
             setEditing(null);
           }}
         />
@@ -99,52 +102,91 @@ export default function ResultList({
   );
 }
 
-function SubtitleEditModal({
+type Tab = "style" | "text";
+
+function EditModal({
   item,
   onClose,
   onSave,
 }: {
   item: RenderedItem;
   onClose: () => void;
-  onSave: (cues: Cue[]) => void;
+  onSave: (patch: Partial<Highlight>) => void;
 }) {
-  const [cues, setCues] = useState<Cue[]>(item.highlight.cues.map((c) => ({ ...c })));
+  const h = item.highlight;
+  const [tab, setTab] = useState<Tab>("style");
+  const [cues, setCues] = useState<Cue[]>(h.cues.map((c) => ({ ...c })));
+  const [line1, setLine1] = useState(h.titleLine1);
+  const [line2, setLine2] = useState(h.titleLine2);
+  const [titleStyle, setTitleStyle] = useState<TitleStyle>(h.titleStyle ?? DEFAULT_TITLE_STYLE);
+  const [subtitles, setSubtitles] = useState<SubtitleOptions>(
+    h.subtitles ?? { enabled: true, size: "large", position: "band" },
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-line bg-panel">
+      <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl border border-line bg-panel">
         <div className="border-b border-line p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold">자막 수정</h3>
+            <h3 className="text-lg font-bold">수정</h3>
             <button onClick={onClose} className="text-muted hover:text-white">
               ✕
             </button>
           </div>
           <p className="mt-1 text-sm text-muted">
-            잘못 인식된 글자를 고쳐 보세요. 저장하면 다시 렌더링됩니다.
+            고친 뒤 [다시 만들기]를 누르면 이 영상만 새로 만듭니다. 30초 정도 걸려요.
           </p>
+          <div className="mt-4 flex gap-2">
+            <TabBtn active={tab === "style"} onClick={() => setTab("style")}>
+              제목 · 자막 설정
+            </TabBtn>
+            <TabBtn active={tab === "text"} onClick={() => setTab("text")}>
+              자막 글자 고치기
+            </TabBtn>
+          </div>
         </div>
 
-        <div className="scroll-thin flex-1 space-y-2 overflow-y-auto p-5">
-          {cues.map((c, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="mt-2.5 w-12 flex-shrink-0 font-mono text-xs text-muted">
-                {mmss(c.start)}
-              </span>
-              <textarea
-                value={c.text}
-                onChange={(e) => {
-                  const n = [...cues];
-                  n[i] = { ...n[i], text: e.target.value };
-                  setCues(n);
-                }}
-                rows={1}
-                className="input min-h-[42px] resize-y py-2 text-sm"
+        <div className="scroll-thin flex-1 overflow-y-auto p-5">
+          {tab === "style" ? (
+            <div className="space-y-6">
+              <TitleControls
+                value={titleStyle}
+                onChange={setTitleStyle}
+                line1={line1}
+                line2={line2}
+                onLine1={setLine1}
+                onLine2={setLine2}
               />
+              <div className="border-t border-line pt-5">
+                <SubtitleControls value={subtitles} onChange={setSubtitles} />
+              </div>
             </div>
-          ))}
-          {cues.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted">이 구간에는 자막이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="mb-3 text-sm text-muted">
+                잘못 인식된 글자를 고쳐 보세요. 줄 수와 타이밍은 그대로 유지됩니다.
+              </p>
+              {cues.map((c, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="mt-2.5 w-12 flex-shrink-0 font-mono text-xs text-muted">
+                    {mmss(c.start)}
+                  </span>
+                  <textarea
+                    value={c.text}
+                    onChange={(e) => {
+                      const n = [...cues];
+                      n[i] = { ...n[i], text: e.target.value };
+                      setCues(n);
+                    }}
+                    rows={1}
+                    className="input min-h-[42px] resize-y py-2 text-sm"
+                  />
+                </div>
+              ))}
+              {cues.length === 0 && (
+                <p className="py-8 text-center text-sm text-muted">이 구간에는 자막이 없습니다.</p>
+              )}
+            </div>
           )}
         </div>
 
@@ -156,14 +198,37 @@ function SubtitleEditModal({
             취소
           </button>
           <button
-            onClick={() => onSave(cues)}
+            onClick={() =>
+              onSave({ cues, titleLine1: line1, titleLine2: line2, titleStyle, subtitles })
+            }
             className="flex-1 rounded-xl bg-accent py-3 font-extrabold text-black hover:bg-accent2"
           >
-            수정 반영
+            다시 만들기
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+        active ? "bg-panel2 text-white" : "text-muted hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

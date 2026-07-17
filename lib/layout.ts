@@ -6,7 +6,7 @@
 //   video       y 480  - 1439  (960px, 1080x960 = 9:8, center-cropped)
 //   subtitle    y 1440 - 1919  (480px)
 
-import type { SubtitlePosition, SubtitleSize, TemplateId } from "./types";
+import type { SubtitlePosition, SubtitleSize, TemplateId, TitleSize } from "./types";
 
 export const CANVAS_W = 1080;
 export const CANVAS_H = 1920;
@@ -25,6 +25,49 @@ export const TITLE = {
   maxTextWidth: 900, // observed max 727; keep 90px side margins
   minFontSize: 56,
 };
+
+// Derived from the measurements above: the two lines sit 115px apart, and their
+// block is centred on y=299.5 (notably NOT the band's own centre of 240 — the
+// samples leave more air above the title than below).
+const TITLE_BLOCK_CENTER_Y = (TITLE.line1CenterY + TITLE.line2CenterY) / 2; // 299.5
+const TITLE_LINE_GAP = TITLE.line2CenterY - TITLE.line1CenterY; // 115
+
+export const TITLE_FONT_SIZE: Record<TitleSize, number> = {
+  small: 88,
+  medium: TITLE.fontSize, // 116 — the measured default
+  large: 142,
+  xlarge: 168,
+};
+
+// Line spacing has to grow with the font, or bigger titles collide: at size 168
+// a glyph is ~130px tall but the measured gap is only 115. Scaling the gap by
+// the same factor keeps the block centred and inside the 480px band.
+export function titlePlacement(size: TitleSize = "medium"): {
+  fontSize: number;
+  line1CenterY: number;
+  line2CenterY: number;
+} {
+  const fontSize = TITLE_FONT_SIZE[size];
+  const gap = TITLE_LINE_GAP * (fontSize / TITLE.fontSize);
+  return {
+    fontSize,
+    line1CenterY: Math.round(TITLE_BLOCK_CENTER_Y - gap / 2),
+    line2CenterY: Math.round(TITLE_BLOCK_CENTER_Y + gap / 2),
+  };
+}
+
+// Swatches offered for title colors. Chosen to stay legible on both the black
+// and the cream template background.
+export const TITLE_COLOR_PRESETS: { hex: string; label: string }[] = [
+  { hex: "#FFFFFF", label: "흰색" },
+  { hex: "#FFFF5A", label: "노랑" },
+  { hex: "#FF9F1C", label: "주황" },
+  { hex: "#C1392B", label: "빨강" },
+  { hex: "#4DA6FF", label: "파랑" },
+  { hex: "#3DD68C", label: "초록" },
+  { hex: "#1B243D", label: "남색" },
+  { hex: "#000000", label: "검정" },
+];
 
 export interface Template {
   id: TemplateId;

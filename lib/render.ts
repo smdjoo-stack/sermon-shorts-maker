@@ -13,7 +13,7 @@ import { FFMPEG, FONTS_DIR } from "./binaries";
 import { buildAss } from "./ass";
 import { TEMPLATES, VIDEO_BAND, CANVAS_W, CANVAS_H } from "./layout";
 import { tmpPath, outPath } from "./storage";
-import type { Cue, SubtitleOptions, TemplateId, VideoFit } from "./types";
+import type { Cue, SubtitleOptions, TemplateId, TitleStyle, VideoFit } from "./types";
 
 // ffmpeg's subtitles filter needs an escaped path (Windows drive colons, backslashes).
 function escFilterPath(p: string): string {
@@ -27,6 +27,7 @@ export interface RenderParams {
   template: TemplateId;
   titleLine1: string;
   titleLine2: string;
+  titleStyle?: TitleStyle;
   cues: Cue[]; // absolute timing; will be shifted to clip-relative
   subtitles: SubtitleOptions;
   fit?: VideoFit; // default "crop"
@@ -52,6 +53,7 @@ export async function renderHighlight(params: RenderParams): Promise<string> {
     template: params.template,
     titleLine1: params.titleLine1,
     titleLine2: params.titleLine2,
+    titleStyle: params.titleStyle,
     clipDurationSec: dur,
     cues: relCues,
     subtitles: params.subtitles,

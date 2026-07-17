@@ -10,9 +10,10 @@ import {
   TITLE,
   SUB_FONT_SIZE,
   subtitlePlacement,
+  titlePlacement,
   TEMPLATES,
 } from "./layout";
-import type { Cue, SubtitleOptions, TemplateId } from "./types";
+import type { Cue, SubtitleOptions, TemplateId, TitleStyle } from "./types";
 
 // hex "#RRGGBB" -> ASS "&HAABBGGRR" (AA=00 opaque)
 function assColor(hex: string, alpha = "00"): string {
@@ -40,6 +41,7 @@ export interface AssParams {
   template: TemplateId;
   titleLine1: string;
   titleLine2: string;
+  titleStyle?: TitleStyle;
   clipDurationSec: number; // title shows for whole clip
   cues: Cue[]; // already shifted to clip-relative timing
   subtitles: SubtitleOptions;
@@ -50,10 +52,15 @@ export function buildAss(p: AssParams): string {
   const subFont = SUB_FONT_SIZE[p.subtitles.size];
   const place = subtitlePlacement(p.subtitles.position);
 
+  const title = titlePlacement(p.titleStyle?.size ?? "medium");
+  // Fall back to the template's colors when the user hasn't picked one.
+  const c1 = p.titleStyle?.line1Color || tpl.titleLine1;
+  const c2 = p.titleStyle?.line2Color || tpl.titleLine2;
+
   const styles = [
     // Title lines: no outline, centered; we position each with \pos overrides.
-    `Style: Title,${TITLE_FONT_NAME},${TITLE.fontSize},${assColor(tpl.titleLine1)},${assColor(tpl.titleLine1)},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1`,
-    `Style: TitleAccent,${TITLE_FONT_NAME},${TITLE.fontSize},${assColor(tpl.titleLine2)},${assColor(tpl.titleLine2)},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1`,
+    `Style: Title,${TITLE_FONT_NAME},${title.fontSize},${assColor(c1)},${assColor(c1)},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1`,
+    `Style: TitleAccent,${TITLE_FONT_NAME},${title.fontSize},${assColor(c2)},${assColor(c2)},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1`,
     // Subtitle: outlined for readability, bottom-anchored via alignment/marginV.
     `Style: Sub,${SUB_FONT_NAME},${subFont},${assColor(tpl.subtitle)},${assColor(tpl.subtitle)},${assColor(tpl.subtitleOutline)},&H96000000,1,0,0,0,100,100,0,0,1,4,1,${place.alignment},80,80,${place.marginV},1`,
   ].join("\n");
@@ -76,13 +83,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
   const end = sec2ass(p.clipDurationSec);
 
   // Title — two absolutely-positioned lines, visible entire clip.
-  const l1 = fitTitle(p.titleLine1);
-  const l2 = fitTitle(p.titleLine2);
+  const l1 = fitTitle(p.titleLine1, title.fontSize);
+  const l2 = fitTitle(p.titleLine2, title.fontSize);
   events.push(
-    `Dialogue: 0,0:00:00.00,${end},Title,,0,0,0,,{\\an5\\pos(${TITLE.centerX},${TITLE.line1CenterY})${l1.tag}}${esc(l1.text)}`,
+    `Dialogue: 0,0:00:00.00,${end},Title,,0,0,0,,{\\an5\\pos(${TITLE.centerX},${title.line1CenterY})${l1.tag}}${esc(l1.text)}`,
   );
   events.push(
-    `Dialogue: 0,0:00:00.00,${end},TitleAccent,,0,0,0,,{\\an5\\pos(${TITLE.centerX},${TITLE.line2CenterY})${l2.tag}}${esc(l2.text)}`,
+    `Dialogue: 0,0:00:00.00,${end},TitleAccent,,0,0,0,,{\\an5\\pos(${TITLE.centerX},${title.line2CenterY})${l2.tag}}${esc(l2.text)}`,
   );
 
   // Dialogue subtitles
@@ -98,14 +105,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
   return `${header}\n${events.join("\n")}\n`;
 }
 
-// Shrink title font (via \fscx/\fscy) if the line is very long.
-function fitTitle(text: string): { text: string; tag: string } {
+// Shrink title font (via \fscx/\fscy) if the line is too wide for the canvas.
+// How many glyphs fit depends on the font size, so a bigger title must start
+// shrinking sooner — otherwise "아주 크게" runs off both screen edges.
+function fitTitle(text: string, fontSize: number): { text: string; tag: string } {
   const len = [...text].length;
-  // rough: at fontSize 96, ~9-10 Korean glyphs fill maxTextWidth(900)
-  const maxGlyphs = 10;
+  // ~10 Korean glyphs fill maxTextWidth(900) at the default size of 116.
+  const maxGlyphs = 10 * (TITLE.fontSize / fontSize);
   if (len <= maxGlyphs) return { text, tag: "" };
   const scale = Math.max(
-    (TITLE.minFontSize / TITLE.fontSize) * 100,
+    (TITLE.minFontSize / fontSize) * 100,
     Math.floor((maxGlyphs / len) * 100),
   );
   return { text, tag: `\\fscx${scale}\\fscy${scale}` };

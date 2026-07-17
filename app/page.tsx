@@ -5,13 +5,8 @@ import SetupForm, { type SetupValues } from "@/components/SetupForm";
 import HighlightList from "@/components/HighlightList";
 import ResultList, { type RenderedItem } from "@/components/ResultList";
 import { analyze, renderShort } from "@/lib/client";
-import type {
-  AnalyzeResult,
-  Cue,
-  Highlight,
-  SubtitleOptions,
-  TemplateId,
-} from "@/lib/types";
+import type { AnalyzeResult, Highlight, SubtitleOptions, TemplateId } from "@/lib/types";
+import { DEFAULT_TITLE_STYLE } from "@/lib/types";
 
 type Step = "setup" | "analyzing" | "select" | "result";
 
@@ -50,12 +45,7 @@ export default function Home() {
     }
   }
 
-  async function renderOne(
-    h: Highlight,
-    v: SetupValues,
-    template: TemplateId,
-    subs: SubtitleOptions,
-  ) {
+  async function renderOne(h: Highlight, v: SetupValues, template: TemplateId) {
     const update = (patch: Partial<RenderedItem>) =>
       setItems((prev) => prev.map((it) => (it.highlight.id === h.id ? { ...it, ...patch } : it)));
     try {
@@ -66,7 +56,8 @@ export default function Home() {
           videoId: analysis!.meta.videoId,
           highlight: h,
           template,
-          subtitles: subs,
+          // The clip's own look wins; this is only a fallback.
+          subtitles: h.subtitles ?? subtitles,
         },
         (p, m) => update({ progress: p, message: m }),
       );
@@ -79,26 +70,33 @@ export default function Home() {
 
   async function handleCreate(selected: Highlight[]) {
     if (!setup || !analysis) return;
+    // Freeze the current settings onto each clip. From here on every clip owns
+    // its own look, so the result screen can tweak one without touching the rest.
+    const baked = selected.map((h) => ({
+      ...h,
+      subtitles: h.subtitles ?? subtitles,
+      titleStyle: h.titleStyle ?? DEFAULT_TITLE_STYLE,
+    }));
     setItems(
-      selected.map((h) => ({ highlight: h, status: "pending", progress: 0, message: "대기 중" })),
+      baked.map((h) => ({ highlight: h, status: "pending", progress: 0, message: "대기 중" })),
     );
     setStep("result");
     // render sequentially (source download is shared/cached; ffmpeg is CPU-bound)
-    for (const h of selected) {
-      await renderOne(h, setup, setup.template, subtitles);
+    for (const h of baked) {
+      await renderOne(h, setup, setup.template);
     }
   }
 
-  async function handleEditSubtitles(highlightId: string, cues: Cue[]) {
+  async function handleRerender(highlightId: string, patch: Partial<Highlight>) {
     if (!setup) return;
     const item = items.find((it) => it.highlight.id === highlightId);
     if (!item) return;
-    const updated: Highlight = { ...item.highlight, cues };
+    const updated: Highlight = { ...item.highlight, ...patch };
     setItems((prev) =>
       prev.map((it) => (it.highlight.id === highlightId ? { ...it, highlight: updated } : it)),
     );
     setHighlights((prev) => prev.map((h) => (h.id === highlightId ? updated : h)));
-    await renderOne(updated, setup, setup.template, subtitles);
+    await renderOne(updated, setup, setup.template);
   }
 
   return (
@@ -140,11 +138,7 @@ export default function Home() {
       )}
 
       {step === "result" && (
-        <ResultList
-          items={items}
-          onEditSubtitles={handleEditSubtitles}
-          onBack={() => setStep("select")}
-        />
+        <ResultList items={items} onRerender={handleRerender} onBack={() => setStep("select")} />
       )}
     </main>
   );

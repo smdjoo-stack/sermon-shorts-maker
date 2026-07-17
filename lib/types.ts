@@ -34,6 +34,18 @@ export interface SubtitleOptions {
   position: SubtitlePosition;
 }
 
+export type TitleSize = "small" | "medium" | "large" | "xlarge";
+
+// Title look. Colors are hex; undefined means "use the template's color", so a
+// highlight that was never customised still follows the template.
+export interface TitleStyle {
+  size: TitleSize;
+  line1Color?: string;
+  line2Color?: string;
+}
+
+export const DEFAULT_TITLE_STYLE: TitleStyle = { size: "medium" };
+
 export interface Highlight {
   id: string;
   startSec: number;
@@ -44,6 +56,10 @@ export interface Highlight {
   sectionTitle: string;
   // per-segment framing choice (defaults to "crop")
   fit?: VideoFit;
+  // Per-segment look. Baked in when rendering starts, then editable on the
+  // result screen — you only know the subtitles are too big once you see them.
+  subtitles?: SubtitleOptions;
+  titleStyle?: TitleStyle;
   // caption cues that fall inside [startSec, endSec], relative timing kept absolute
   cues: Cue[];
 }
