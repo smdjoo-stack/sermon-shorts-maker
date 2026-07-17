@@ -26,6 +26,18 @@ export default function Home() {
   });
   const [items, setItems] = useState<RenderedItem[]>([]);
 
+  // Back to a clean start for a different sermon link. Everything here belongs
+  // to the previous video, so stale highlights/results can't leak across.
+  function handleHome() {
+    setItems([]);
+    setAnalysis(null);
+    setHighlights([]);
+    setError("");
+    setProgress(0);
+    setProgressMsg("");
+    setStep("setup");
+  }
+
   async function handleAnalyze(v: SetupValues) {
     setSetup(v);
     setError("");
@@ -138,7 +150,12 @@ export default function Home() {
       )}
 
       {step === "result" && (
-        <ResultList items={items} onRerender={handleRerender} onBack={() => setStep("select")} />
+        <ResultList
+          items={items}
+          onRerender={handleRerender}
+          onBack={() => setStep("select")}
+          onHome={handleHome}
+        />
       )}
     </main>
   );

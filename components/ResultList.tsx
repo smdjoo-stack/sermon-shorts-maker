@@ -20,21 +20,37 @@ export default function ResultList({
   items,
   onRerender,
   onBack,
+  onHome,
 }: {
   items: RenderedItem[];
   // Anything the user changed here means re-rendering that one clip.
   onRerender: (highlightId: string, patch: Partial<Highlight>) => void;
   onBack: () => void;
+  onHome: () => void;
 }) {
   const [editing, setEditing] = useState<RenderedItem | null>(null);
+  const rendering = items.some((it) => it.status === "pending" || it.status === "rendering");
 
   return (
     <div className="mx-auto w-full max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <h2 className="text-2xl font-extrabold">쇼츠가 완성됐어요 🎉</h2>
-        <button onClick={onBack} className="text-sm text-muted hover:text-white">
-          ← 구간 다시 고르기
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button onClick={onBack} className="rounded-lg px-3 py-2 text-sm text-muted hover:text-white">
+            ← 구간 다시 고르기
+          </button>
+          <button
+            onClick={() => {
+              // Leaving mid-render abandons clips that aren't finished yet.
+              if (rendering && !confirm("아직 만드는 중인 영상이 있어요. 그래도 처음으로 갈까요?")) return;
+              if (!confirm("다른 영상으로 새로 시작할까요?\n(만든 쇼츠는 다운로드하지 않으면 이 화면에서 사라져요)")) return;
+              onHome();
+            }}
+            className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-muted hover:border-accent hover:text-white"
+          >
+            🏠 홈으로
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2">

@@ -8,7 +8,7 @@
 // read-only dir inside an asar archive, so every writable/external path must be
 // redirected. See lib/paths.ts for the receiving end.
 
-const { app, BrowserWindow, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog, ipcMain, safeStorage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -35,6 +35,55 @@ let win = null;
 
 // resources/ next to the exe when packaged; repo root in dev.
 const resourcesDir = isDev ? path.join(__dirname, "..") : process.resourcesPath;
+
+// ---- settings store -------------------------------------------------------
+// Lives in the main process because the renderer's origin changes with the
+// port on every launch (see preload.js). Values are encrypted with the OS
+// keychain where available — one of them is the user's API key, and the plain
+// alternative would leave it readable in a text file forever.
+
+function settingsFile() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function readSettings() {
+  try {
+    return JSON.parse(fs.readFileSync(settingsFile(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeSettings(obj) {
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify(obj), { mode: 0o600 });
+  } catch (e) {
+    console.error("[settings] 저장 실패:", e.message);
+  }
+}
+
+ipcMain.handle("settings:get", (_e, key) => {
+  const raw = readSettings()[key];
+  if (typeof raw !== "string") return null;
+  if (!raw.startsWith("enc:")) return raw; // written before encryption was available
+  try {
+    return safeStorage.decryptString(Buffer.from(raw.slice(4), "base64"));
+  } catch {
+    return null; // keychain changed or profile copied to another machine
+  }
+});
+
+ipcMain.handle("settings:set", (_e, key, value) => {
+  const all = readSettings();
+  if (value == null || value === "") delete all[key];
+  else if (safeStorage.isEncryptionAvailable()) {
+    all[key] = "enc:" + safeStorage.encryptString(String(value)).toString("base64");
+  } else {
+    all[key] = String(value);
+  }
+  writeSettings(all);
+  return true;
+});
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -115,7 +164,11 @@ function createWindow(url) {
     show: false,
     autoHideMenuBar: true,
     title: "설교 쇼츠 메이커",
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
   win.once("ready-to-show", () => win.show());
   // External links (e.g. "API 키 발급받기") open in the real browser, not here.

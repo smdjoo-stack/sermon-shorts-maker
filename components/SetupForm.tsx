@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { loadSetting, saveSetting } from "@/lib/settings";
 import type { TemplateId } from "@/lib/types";
 import { TEMPLATES } from "@/lib/layout";
 
@@ -34,19 +35,26 @@ export default function SetupForm({
   const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {
-    const k = localStorage.getItem("gemini_api_key");
-    if (k) {
-      setApiKey(k);
-      setSavedKey(true);
-    }
-    const c = localStorage.getItem("church_name");
-    if (c) setChurchName(c);
+    let cancelled = false;
+    (async () => {
+      const k = await loadSetting("gemini_api_key");
+      if (cancelled) return;
+      if (k) {
+        setApiKey(k);
+        setSavedKey(true);
+      }
+      const c = await loadSetting("church_name");
+      if (!cancelled && c) setChurchName(c);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function submit() {
     if (!url.trim()) return;
-    if (apiKey.trim()) localStorage.setItem("gemini_api_key", apiKey.trim());
-    if (churchName.trim()) localStorage.setItem("church_name", churchName.trim());
+    void saveSetting("gemini_api_key", apiKey.trim());
+    void saveSetting("church_name", churchName.trim());
     onSubmit({ apiKey: apiKey.trim(), url: url.trim(), targetSec, template, churchName: churchName.trim() });
   }
 

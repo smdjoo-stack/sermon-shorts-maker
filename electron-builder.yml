@@ -19,6 +19,7 @@ afterPack: electron/afterPack.mjs
 # and Node built-ins, so it needs none of it.
 files:
   - electron/main.js
+  - electron/preload.js
   - package.json
   - "!node_modules/**"
 
