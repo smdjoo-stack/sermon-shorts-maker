@@ -84,8 +84,20 @@ function round(n: number): number {
 }
 
 // Given cue indices from the AI, produce raw seconds from cue edges.
-export function cueRangeToSeconds(cues: Cue[], startIdx: number, endIdx: number) {
-  const s = cues[Math.max(0, Math.min(startIdx, cues.length - 1))];
-  const e = cues[Math.max(0, Math.min(endIdx, cues.length - 1))];
-  return { rawStart: s.start, rawEnd: e.end };
+//
+// Returns null when the model hands back indices that aren't in the transcript.
+// This used to clamp instead — and clamping is what turned one bad AI response
+// into six highlights that all pointed at the last cue, with identical times,
+// looking perfectly plausible in the UI. A picked range we can't honour has to
+// be visible, not quietly rewritten into a wrong-but-valid one.
+export function cueRangeToSeconds(
+  cues: Cue[],
+  startIdx: number,
+  endIdx: number,
+): { rawStart: number; rawEnd: number } | null {
+  if (!Number.isInteger(startIdx) || !Number.isInteger(endIdx)) return null;
+  if (startIdx < 0 || endIdx < 0) return null;
+  if (startIdx >= cues.length || endIdx >= cues.length) return null;
+  if (endIdx < startIdx) return null;
+  return { rawStart: cues[startIdx].start, rawEnd: cues[endIdx].end };
 }

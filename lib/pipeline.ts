@@ -11,6 +11,7 @@ import {
 } from "./ytdlp";
 import { analyzeHighlights } from "./gemini";
 import { transcribeAudio } from "./gemini";
+import { prepareSpeechChunks, cleanupChunks } from "./audio";
 import { detectSilence } from "./silence";
 import { correctBoundary, cueRangeToSeconds } from "./boundaries";
 import { cuesInRange } from "./captions";
@@ -36,10 +37,33 @@ export async function runAnalyze(
 
   if (!cues || cues.length < 5) {
     hasCaptions = false;
-    progress(0.35, "자막이 없어 음성을 인식하는 중... (조금 더 걸려요)");
+    progress(0.3, "자막이 없어 음성을 인식하는 중... (조금 더 걸려요)");
     const audioPath = await fetchAudio(url, videoId);
-    const buf = fs.readFileSync(audioPath);
-    cues = await transcribeAudio(apiKey, buf.toString("base64"), "audio/mp4");
+    const chunks = await prepareSpeechChunks(audioPath, videoId);
+
+    // Transcribe chunk by chunk and shift each result back onto the real
+    // timeline. One request for the whole recording silently truncates.
+    const all: Cue[] = [];
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        progress(
+          0.3 + (i / chunks.length) * 0.2,
+          `음성을 인식하는 중... (${i + 1}/${chunks.length})`,
+        );
+        const buf = fs.readFileSync(chunks[i].file);
+        const part = await transcribeAudio(apiKey, buf.toString("base64"), "audio/mpeg");
+        for (const c of part) {
+          all.push({
+            start: c.start + chunks[i].offsetSec,
+            end: c.end + chunks[i].offsetSec,
+            text: c.text,
+          });
+        }
+      }
+    } finally {
+      cleanupChunks(chunks);
+    }
+    cues = all.sort((a, b) => a.start - b.start);
   }
   if (!cues || cues.length < 3) throw new Error("자막·음성 인식에 실패했습니다.");
 
@@ -57,10 +81,29 @@ export async function runAnalyze(
     silences = []; // fall back to cue-edge boundaries only
   }
 
-  const highlights: Highlight[] = raw.map((h) => {
-    const { rawStart, rawEnd } = cueRangeToSeconds(cues!, h.startCueIdx, h.endCueIdx);
-    const { startSec, endSec } = correctBoundary(rawStart, rawEnd, cues!, silences);
-    return {
+  const highlights: Highlight[] = [];
+  let rejected = 0;
+  for (const h of raw) {
+    // The model sometimes points outside the transcript — most often when the
+    // transcript is a truncated audio transcription of a long service, so it
+    // reasons about a 90-minute video while only ~49 minutes exist. Skip those
+    // rather than snapping them to the nearest valid cue.
+    const range = cueRangeToSeconds(cues!, h.startCueIdx, h.endCueIdx);
+    if (!range) {
+      rejected++;
+      continue;
+    }
+    const { startSec, endSec } = correctBoundary(range.rawStart, range.rawEnd, cues!, silences);
+
+    // Second net: even with valid indices, boundary correction can collapse two
+    // picks onto the same clip. Showing the user near-duplicates is worse than
+    // showing fewer options.
+    if (highlights.some((x) => Math.abs(x.startSec - startSec) < 5 && Math.abs(x.endSec - endSec) < 5)) {
+      rejected++;
+      continue;
+    }
+
+    highlights.push({
       id: randomUUID(),
       startSec,
       endSec,
@@ -69,8 +112,21 @@ export async function runAnalyze(
       summary: h.summary,
       sectionTitle: h.sectionTitle,
       cues: cuesInRange(cues!, startSec, endSec),
-    };
-  });
+    });
+  }
+
+  if (highlights.length === 0) {
+    throw new Error(
+      hasCaptions
+        ? "AI가 고른 구간을 영상에서 찾지 못했습니다. 다시 시도해 주세요."
+        : "이 영상은 유튜브 자막이 아직 없어 음성 인식으로 분석했는데, 영상이 길어 끝까지 인식하지 못했습니다.\n" +
+          "유튜브에 올린 지 얼마 안 된 영상이면 자막이 생길 때까지 몇 시간 기다렸다가 다시 시도해 주세요.\n" +
+          "또는 설교 부분만 잘라 올린 영상을 사용해 주세요.",
+    );
+  }
+  if (rejected > 0) {
+    console.warn(`[analyze] 하이라이트 ${rejected}개 버림 (범위 밖이거나 중복), ${highlights.length}개 남음`);
+  }
 
   // cache cues for later custom-range / re-render use
   cacheCues(videoId, cues);
