@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createJob, runJob } from "@/lib/jobs";
 import { fetchVideo } from "@/lib/pipeline";
-import { renderHighlight } from "@/lib/render";
+import { renderHighlight, writeChurchLogo } from "@/lib/render";
 import { outUrl } from "@/lib/storage";
 import type { RenderRequest, Cue } from "@/lib/types";
 
@@ -18,7 +18,7 @@ function styleTag(o: unknown): string {
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as RenderRequest & { url: string };
-  const { url, videoId, highlight, template } = body;
+  const { url, videoId, highlight, template, churchName, churchLogo } = body;
   if (!url || !videoId || !highlight) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
@@ -46,8 +46,11 @@ export async function POST(req: NextRequest) {
       t1: highlight.titleLine1,
       t2: highlight.titleLine2,
       cues: highlight.cues,
+      churchName,
+      churchLogo,
     });
     const outName = `${videoId}_${highlight.id}_${tag}.mp4`;
+    const churchLogoPath = churchLogo ? writeChurchLogo(churchLogo, tag) ?? undefined : undefined;
     await renderHighlight({
       sourcePath: source,
       startSec: highlight.startSec,
@@ -60,6 +63,8 @@ export async function POST(req: NextRequest) {
       subtitles,
       fit,
       outName,
+      churchName,
+      churchLogoPath,
       onProgress: (p) => progress(0.6 + p * 0.4, "쇼츠를 렌더링하는 중..."),
     });
 

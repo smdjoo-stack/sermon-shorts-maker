@@ -32,7 +32,24 @@ export interface RenderParams {
   subtitles: SubtitleOptions;
   fit?: VideoFit; // default "crop"
   outName: string;
+  churchName?: string;
+  churchLogoPath?: string; // top-left watermark image; church name goes top-right
   onProgress?: (p: number) => void;
+}
+
+const DATA_URL_RE = /^data:image\/(png|jpe?g|webp);base64,([a-zA-Z0-9+/=]+)$/;
+
+// Decode a church-logo data URL onto disk for ffmpeg to read as a second input.
+// Returns null for anything that isn't actually an image data URL — the
+// watermark is optional, so a malformed value just means "skip the logo"
+// rather than a request failure.
+export function writeChurchLogo(dataUrl: string, seed: string): string | null {
+  const m = DATA_URL_RE.exec(dataUrl);
+  if (!m) return null;
+  const ext = m[1] === "jpg" ? "jpeg" : m[1];
+  const file = tmpPath(`logo_${seed}.${ext}`);
+  fs.writeFileSync(file, Buffer.from(m[2], "base64"));
+  return file;
 }
 
 export async function renderHighlight(params: RenderParams): Promise<string> {
@@ -57,6 +74,7 @@ export async function renderHighlight(params: RenderParams): Promise<string> {
     clipDurationSec: dur,
     cues: relCues,
     subtitles: params.subtitles,
+    churchName: params.churchName,
   });
   const assPath = tmpPath(`${params.outName}.ass`);
   fs.writeFileSync(assPath, ass, "utf8");
@@ -75,12 +93,19 @@ export async function renderHighlight(params: RenderParams): Promise<string> {
 
   // filtergraph:
   //   [0] -> fit into video band -> [vid]
-  //   color bg canvas -> overlay [vid] at y=480 -> subtitles(ASS)
+  //   color bg canvas -> overlay [vid] at y=480 -> (logo watermark, top-left) -> subtitles(ASS)
+  // The church name itself is drawn by the ASS pass (top-right) alongside the title.
+  const hasLogo = !!params.churchLogoPath;
   const filter = [
     fitFilter,
     `color=c=${bg}:s=${CANVAS_W}x${CANVAS_H}:d=${dur.toFixed(3)}[bgc]`,
     `[bgc][vid]overlay=0:${VIDEO_BAND.top}[comp]`,
-    `[comp]subtitles='${escFilterPath(assPath)}':fontsdir='${escFilterPath(FONTS_DIR)}'[outv]`,
+    // Height/top kept in sync with ass.ts's WATERMARK.centerY (church name
+    // sits at the logo's vertical center).
+    ...(hasLogo
+      ? [`[1:v]scale=-1:76[logo]`, `[comp][logo]overlay=48:40[comp2]`]
+      : []),
+    `[${hasLogo ? "comp2" : "comp"}]subtitles='${escFilterPath(assPath)}':fontsdir='${escFilterPath(FONTS_DIR)}'[outv]`,
   ].join(";");
 
   const args = [
@@ -92,6 +117,7 @@ export async function renderHighlight(params: RenderParams): Promise<string> {
     "-accurate_seek",
     "-i",
     params.sourcePath,
+    ...(hasLogo ? ["-i", params.churchLogoPath as string] : []),
     "-filter_complex",
     filter,
     "-map",

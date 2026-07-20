@@ -45,7 +45,13 @@ export interface AssParams {
   clipDurationSec: number; // title shows for whole clip
   cues: Cue[]; // already shifted to clip-relative timing
   subtitles: SubtitleOptions;
+  churchName?: string; // top-right watermark, alongside the logo (top-left) render.ts overlays
 }
+
+// Watermark row at the very top of the title band — clear of the title text,
+// which starts at y≈130 at its biggest size (see layout.ts). centerY is kept
+// in sync with the logo's vertical center in render.ts (LOGO_HEIGHT/2 + top).
+const WATERMARK = { fontSize: 42, centerY: 78, rightMargin: 56 };
 
 export function buildAss(p: AssParams): string {
   const tpl = TEMPLATES[p.template];
@@ -63,6 +69,8 @@ export function buildAss(p: AssParams): string {
     `Style: TitleAccent,${TITLE_FONT_NAME},${title.fontSize},${assColor(c2)},${assColor(c2)},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1`,
     // Subtitle: outlined for readability, bottom-anchored via alignment/marginV.
     `Style: Sub,${SUB_FONT_NAME},${subFont},${assColor(tpl.subtitle)},${assColor(tpl.subtitle)},${assColor(tpl.subtitleOutline)},&H96000000,1,0,0,0,100,100,0,0,1,4,1,${place.alignment},80,80,${place.marginV},1`,
+    // Watermark: small, semi-transparent church name, top-right corner.
+    `Style: Watermark,${SUB_FONT_NAME},${WATERMARK.fontSize},${assColor(c1, "40")},${assColor(c1, "40")},${assColor(tpl.bg)},&H64000000,1,0,0,0,100,100,0,0,1,0,0,9,0,0,0,1`,
   ].join("\n");
 
   const header = `[Script Info]
@@ -91,6 +99,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
   events.push(
     `Dialogue: 0,0:00:00.00,${end},TitleAccent,,0,0,0,,{\\an5\\pos(${TITLE.centerX},${title.line2CenterY})${l2.tag}}${esc(l2.text)}`,
   );
+
+  // Watermark — top-right, anchored so it never collides with the title below it.
+  if (p.churchName?.trim()) {
+    events.push(
+      `Dialogue: 0,0:00:00.00,${end},Watermark,,0,0,0,,{\\an9\\pos(${CANVAS_W - WATERMARK.rightMargin},${WATERMARK.centerY})}${esc(p.churchName.trim())}`,
+    );
+  }
 
   // Dialogue subtitles
   if (p.subtitles.enabled) {

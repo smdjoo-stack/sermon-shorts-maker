@@ -84,6 +84,7 @@ export interface RenderRequest {
   subtitles: SubtitleOptions;
   // church badge (optional)
   churchName?: string;
+  churchLogo?: string; // data URL (image/png|jpeg|webp;base64,...)
 }
 
 // Job queue

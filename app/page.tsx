@@ -70,6 +70,8 @@ export default function Home() {
           template,
           // The clip's own look wins; this is only a fallback.
           subtitles: h.subtitles ?? subtitles,
+          churchName: v.churchName || undefined,
+          churchLogo: v.churchLogo || undefined,
         },
         (p, m) => update({ progress: p, message: m }),
       );

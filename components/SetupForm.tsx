@@ -11,7 +11,11 @@ export interface SetupValues {
   targetSec: number;
   template: TemplateId;
   churchName: string;
+  churchLogo: string; // data URL, "" if none
 }
+
+// Generous enough for a logo, small enough to keep in localStorage/JSON body.
+const MAX_LOGO_BYTES = 1_500_000;
 
 const TARGETS = [
   { sec: 30, label: "30초" },
@@ -32,6 +36,8 @@ export default function SetupForm({
   const [targetSec, setTargetSec] = useState(60);
   const [template, setTemplate] = useState<TemplateId>("dark");
   const [churchName, setChurchName] = useState("");
+  const [churchLogo, setChurchLogo] = useState("");
+  const [logoError, setLogoError] = useState("");
   const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {
@@ -45,17 +51,51 @@ export default function SetupForm({
       }
       const c = await loadSetting("church_name");
       if (!cancelled && c) setChurchName(c);
+      const l = await loadSetting("church_logo");
+      if (!cancelled && l) setChurchLogo(l);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  function handleLogoFile(file: File | null) {
+    setLogoError("");
+    if (!file) {
+      setChurchLogo("");
+      void saveSetting("church_logo", "");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setLogoError("이미지 파일만 올릴 수 있어요.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError("로고 파일이 너무 커요 (1.5MB 이하로 올려주세요).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      setChurchLogo(dataUrl);
+      void saveSetting("church_logo", dataUrl);
+    };
+    reader.onerror = () => setLogoError("로고 파일을 읽지 못했습니다.");
+    reader.readAsDataURL(file);
+  }
+
   function submit() {
     if (!url.trim()) return;
     void saveSetting("gemini_api_key", apiKey.trim());
     void saveSetting("church_name", churchName.trim());
-    onSubmit({ apiKey: apiKey.trim(), url: url.trim(), targetSec, template, churchName: churchName.trim() });
+    onSubmit({
+      apiKey: apiKey.trim(),
+      url: url.trim(),
+      targetSec,
+      template,
+      churchName: churchName.trim(),
+      churchLogo,
+    });
   }
 
   return (
@@ -154,14 +194,46 @@ export default function SetupForm({
           </div>
         </Field>
 
-        {/* church name */}
-        <Field n={5} label="교회명 (선택)">
+        {/* church name + logo watermark */}
+        <Field n={5} label="교회명 · 로고 (선택)">
           <input
             value={churchName}
             onChange={(e) => setChurchName(e.target.value)}
             placeholder="예) 사랑교회"
             className="input"
           />
+          <p className="mt-2 text-xs text-muted">
+            입력하면 영상 상단에 작은 워터마크로 함께 들어갑니다.
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            {churchLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={churchLogo}
+                alt="교회 로고 미리보기"
+                className="h-10 w-10 rounded object-contain bg-panel2"
+              />
+            )}
+            <label className="cursor-pointer rounded-lg border border-line bg-panel2 px-3 py-2 text-xs font-bold text-muted hover:border-accent/50">
+              로고 이미지 선택
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => handleLogoFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {churchLogo && (
+              <button
+                type="button"
+                onClick={() => handleLogoFile(null)}
+                className="text-xs font-bold text-muted underline hover:text-white"
+              >
+                제거
+              </button>
+            )}
+          </div>
+          {logoError && <p className="mt-2 text-xs text-red-400">{logoError}</p>}
         </Field>
 
         <button
