@@ -2,7 +2,24 @@
 
 설교 유튜브 링크를 넣으면 AI가 하이라이트 구간을 찾아 1080×1920 쇼츠 영상으로 만들어 주는 데스크톱 앱입니다.
 
-## 📥 다운로드
+## 🌐 웹으로 사용하기 (맥·윈도우 공통)
+
+Windows 전용 설치 파일 대신, **웹앱으로 실행**하면 맥·윈도우 어디서든 브라우저로 사용할 수 있습니다.
+처음 한 번만 [Node.js](https://nodejs.org)를 설치하면 됩니다 (LTS 버전 권장).
+
+1. 이 저장소를 내려받습니다 (`Code` → `Download ZIP` 또는 `git clone`).
+2. `web` 폴더 안의 실행 파일을 더블클릭합니다.
+   - 맥: `web/start-mac.command`
+   - 윈도우: `web/start-windows.bat`
+3. 처음 실행할 때는 필요한 프로그램을 자동으로 설치·준비하느라 몇 분 걸릴 수 있습니다. 이후에는 몇 초 안에 시작됩니다.
+4. 브라우저 창이 자동으로 열리며 `http://localhost:3939` 에서 사용할 수 있습니다.
+
+Gemini API 키는 화면에서 입력하며 **브라우저에만 저장**됩니다. 무료로 발급받으려면 [Google AI Studio](https://aistudio.google.com/apikey)를 이용하세요.
+`ffmpeg`와 `yt-dlp`는 첫 실행 때 자동으로 받아옵니다. 별도 설치가 필요 없습니다.
+
+> macOS에서 "확인되지 않은 개발자" 경고가 뜨면 `start-mac.command`를 마우스 우클릭 → 열기를 선택하세요.
+
+## 📥 데스크톱 앱 (Windows 전용 설치 파일)
 
 **[설치 파일 받기 (Windows)](https://github.com/Rojaewon/sermon-shorts-maker/releases/latest)**
 
